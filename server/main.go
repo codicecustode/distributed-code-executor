@@ -1,11 +1,15 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
 	"flag"
 	"log"
 	"time"
 	"math/big"
 	"encoding/pem"
+	"context"
 	
 	"crypto/tls"
 	"crypto/rsa"
@@ -14,6 +18,7 @@ import (
 	"crypto/rand"
 
 	"github.com/quic-go/quic-go"
+	
 )
 
 
@@ -46,6 +51,29 @@ func main(){
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	defer listener.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		<-sigChan
+		log.Println("Due to OS Interruption, Shutting down server...")
+		cancel()
+	}()
+
+	for {
+		conn, err := listener.Accept(ctx)
+
+		if err != nil {
+			log.Printf("Failed to accept connection: %v", err)
+      continue
+		}
+
+		go HandleConnection(conn)
+	}
 
 }
 
